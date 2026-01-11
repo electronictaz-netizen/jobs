@@ -1,5 +1,7 @@
 # AWS Amplify Deployment Guide
 
+**⚠️ IMPORTANT**: This guide has been updated. For the most detailed step-by-step instructions, see `DEPLOYMENT_STEPS.md`.
+
 This guide will help you deploy the Aircrew Transportation Management System to AWS Amplify.
 
 ## Important Architecture Notes

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../api/client';
 import JobForm from '../components/JobForm';
 import JobList from '../components/JobList';
 import DriverForm from '../components/DriverForm';
@@ -41,9 +41,9 @@ const ManagementDashboard = () => {
       if (filters.date) params.append('date', filters.date);
 
       const [jobsRes, driversRes, locationsRes] = await Promise.all([
-        axios.get(`/api/jobs?${params.toString()}`),
-        axios.get('/api/drivers'),
-        axios.get('/api/locations')
+        apiClient.get(`/api/jobs?${params.toString()}`),
+        apiClient.get('/api/drivers'),
+        apiClient.get('/api/locations')
       ]);
 
       setJobs(jobsRes.data);
@@ -80,7 +80,7 @@ const ManagementDashboard = () => {
     if (!confirm('Are you sure you want to delete this driver account?')) return;
 
     try {
-      await axios.delete(`/api/drivers/${id}`);
+      await apiClient.delete(`/api/drivers/${id}`);
       loadData();
     } catch (error: any) {
       console.error('Error deleting driver:', error);
@@ -91,9 +91,9 @@ const ManagementDashboard = () => {
   const handleSaveDriver = async (driverData: Partial<Driver> & { password?: string }) => {
     try {
       if (editingDriver) {
-        await axios.put(`/api/drivers/${editingDriver.id}`, driverData);
+        await apiClient.put(`/api/drivers/${editingDriver.id}`, driverData);
       } else {
-        await axios.post('/api/drivers', driverData);
+        await apiClient.post('/api/drivers', driverData);
       }
       setIsDriverFormOpen(false);
       setEditingDriver(null);
@@ -108,7 +108,7 @@ const ManagementDashboard = () => {
     if (!confirm('Are you sure you want to delete this job?')) return;
 
     try {
-      await axios.delete(`/api/jobs/${id}`);
+      await apiClient.delete(`/api/jobs/${id}`);
       loadData();
     } catch (error) {
       console.error('Error deleting job:', error);
@@ -119,9 +119,9 @@ const ManagementDashboard = () => {
   const handleSaveJob = async (jobData: Partial<Job>) => {
     try {
       if (editingJob) {
-        await axios.put(`/api/jobs/${editingJob.id}`, jobData);
+        await apiClient.put(`/api/jobs/${editingJob.id}`, jobData);
       } else {
-        await axios.post('/api/jobs', jobData);
+        await apiClient.post('/api/jobs', jobData);
       }
       setIsJobFormOpen(false);
       setEditingJob(null);
@@ -134,7 +134,7 @@ const ManagementDashboard = () => {
 
   const handleAssignDriver = async (jobId: number, driverId: number | null) => {
     try {
-      await axios.put(`/api/jobs/${jobId}`, {
+      await apiClient.put(`/api/jobs/${jobId}`, {
         driverId,
         status: driverId ? 'Assigned' : 'Unassigned'
       });

@@ -1,6 +1,8 @@
 import sqlite3 from 'sqlite3';
 import bcrypt from 'bcryptjs';
 
+// Use PostgreSQL if DATABASE_URL is set, otherwise use SQLite
+const usePostgreSQL = !!process.env.DATABASE_URL;
 const dbPath = './transportation.db';
 
 export interface Job {

@@ -1,5 +1,5 @@
 import express from 'express';
-import { query, run } from '../database';
+import { query, run } from '../database-factory';
 
 const router = express.Router();
 

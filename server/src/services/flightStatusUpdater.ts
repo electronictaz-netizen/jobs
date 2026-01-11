@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { query, run } from '../database';
+import { query, run } from '../database-factory';
 
 const API_KEY = process.env.AVIATIONSTACK_API_KEY;
 

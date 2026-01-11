@@ -1,6 +1,6 @@
 import express from 'express';
 import axios from 'axios';
-import { query } from '../database';
+import { query } from '../database-factory';
 
 const router = express.Router();
 

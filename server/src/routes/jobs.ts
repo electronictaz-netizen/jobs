@@ -1,5 +1,5 @@
 import express from 'express';
-import { query, run, Job } from '../database';
+import { query, run, Job } from '../database-factory';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();

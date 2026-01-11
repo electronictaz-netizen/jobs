@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../api/client';
 import { Job } from '../types';
 import { format } from 'date-fns';
 
@@ -21,7 +21,7 @@ const DriverDashboard = () => {
   const loadJobs = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`/api/drivers/${user?.id}/jobs`);
+      const response = await apiClient.get(`/api/drivers/${user?.id}/jobs`);
       setJobs(response.data);
     } catch (error) {
       console.error('Error loading jobs:', error);
@@ -32,7 +32,7 @@ const DriverDashboard = () => {
 
   const handlePickup = async (jobId: number) => {
     try {
-      await axios.post(`/api/jobs/${jobId}/pickup`);
+      await apiClient.post(`/api/jobs/${jobId}/pickup`);
       loadJobs();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to mark pickup');
@@ -41,7 +41,7 @@ const DriverDashboard = () => {
 
   const handleDropoff = async (jobId: number) => {
     try {
-      await axios.post(`/api/jobs/${jobId}/dropoff`);
+      await apiClient.post(`/api/jobs/${jobId}/dropoff`);
       loadJobs();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to mark dropoff');
@@ -52,7 +52,7 @@ const DriverDashboard = () => {
     if (flightStatuses[flightNumber]) return;
 
     try {
-      const response = await axios.get(`/api/flights/status/${flightNumber}`);
+      const response = await apiClient.get(`/api/flights/status/${flightNumber}`);
       setFlightStatuses((prev) => ({
         ...prev,
         [flightNumber]: response.data
