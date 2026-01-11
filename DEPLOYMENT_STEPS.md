@@ -125,18 +125,24 @@ FRONTEND_URL=https://your-amplify-app.amplifyapp.com
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 2.4 Deploy
+### 2.4 Deploy/Update
 
-**Using EB CLI:**
+**Using Console (Recommended):**
+1. Make changes to your code
+2. Build: `cd server && npm run build`
+3. Create ZIP (same as Step 2.2)
+4. Go to Elastic Beanstalk Console → Your environment
+5. Click "Upload and deploy"
+6. Upload your ZIP file
+7. Add version label
+8. Click "Deploy"
+
+**Using EB CLI (if installed):**
 ```bash
 cd server
 npm run build
 eb deploy
 ```
-
-**Using Console:**
-1. Create a ZIP file of your server directory (excluding node_modules, .env, *.db)
-2. Upload via Elastic Beanstalk console
 
 ### 2.5 Get Backend URL
 
