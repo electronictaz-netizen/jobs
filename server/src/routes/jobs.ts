@@ -1,0 +1,245 @@
+import express from 'express';
+import { query, run, Job } from '../database';
+import { authenticate, AuthRequest } from '../middleware/auth';
+
+const router = express.Router();
+
+// Get all jobs (with optional filters)
+router.get('/', async (req, res) => {
+  try {
+    const { status, driverId, date } = req.query;
+    let sql = 'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE 1=1';
+    const params: any[] = [];
+
+    if (status) {
+      sql += ' AND j.status = ?';
+      params.push(status);
+    }
+
+    if (driverId) {
+      sql += ' AND j.driverId = ?';
+      params.push(parseInt(driverId as string));
+    }
+
+    if (date) {
+      sql += ' AND j.pickupDate = ?';
+      params.push(date);
+    }
+
+    sql += ' ORDER BY j.pickupDate, j.pickupTime';
+
+    const jobs = await query(sql, params);
+    res.json(jobs);
+  } catch (error) {
+    console.error('Error fetching jobs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get a single job by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const jobs = await query(
+      'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
+      [id]
+    );
+
+    if (jobs.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json(jobs[0]);
+  } catch (error) {
+    console.error('Error fetching job:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new job
+router.post('/', async (req, res) => {
+  try {
+    const {
+      pickupDate,
+      pickupTime,
+      flightNumber,
+      pickupLocation,
+      dropoffLocation,
+      driverId,
+      numberOfPassengers
+    } = req.body;
+
+    if (!pickupDate || !pickupTime || !flightNumber || !pickupLocation || !dropoffLocation) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const status = driverId ? 'Assigned' : 'Unassigned';
+
+    const result = await run(
+      `INSERT INTO jobs (pickupDate, pickupTime, flightNumber, pickupLocation, dropoffLocation, 
+        driverId, numberOfPassengers, status, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        pickupDate,
+        pickupTime,
+        flightNumber,
+        pickupLocation,
+        dropoffLocation,
+        driverId || null,
+        numberOfPassengers || 1,
+        status
+      ]
+    );
+
+    const newJob = await query(
+      'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
+      [result.lastID]
+    );
+
+    res.status(201).json(newJob[0]);
+  } catch (error) {
+    console.error('Error creating job:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a job
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      pickupDate,
+      pickupTime,
+      flightNumber,
+      pickupLocation,
+      dropoffLocation,
+      driverId,
+      numberOfPassengers,
+      status
+    } = req.body;
+
+    // Check if job exists
+    const existing = await query('SELECT * FROM jobs WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const finalStatus = status || (driverId ? 'Assigned' : 'Unassigned');
+
+    await run(
+      `UPDATE jobs SET 
+        pickupDate = COALESCE(?, pickupDate),
+        pickupTime = COALESCE(?, pickupTime),
+        flightNumber = COALESCE(?, flightNumber),
+        pickupLocation = COALESCE(?, pickupLocation),
+        dropoffLocation = COALESCE(?, dropoffLocation),
+        driverId = ?,
+        numberOfPassengers = COALESCE(?, numberOfPassengers),
+        status = ?,
+        updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        pickupDate,
+        pickupTime,
+        flightNumber,
+        pickupLocation,
+        dropoffLocation,
+        driverId !== undefined ? driverId : existing[0].driverId,
+        numberOfPassengers,
+        finalStatus,
+        id
+      ]
+    );
+
+    const updatedJob = await query(
+      'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
+      [id]
+    );
+
+    res.json(updatedJob[0]);
+  } catch (error) {
+    console.error('Error updating job:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a job
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await run('DELETE FROM jobs WHERE id = ?', [id]);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json({ message: 'Job deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting job:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Driver-specific: Mark pickup time
+router.post('/:id/pickup', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    // Verify job is assigned to this driver
+    const jobs = await query('SELECT * FROM jobs WHERE id = ? AND driverId = ?', [id, userId]);
+    if (jobs.length === 0) {
+      return res.status(404).json({ error: 'Job not found or not assigned to you' });
+    }
+
+    const pickupTime = new Date().toISOString();
+
+    await run(
+      'UPDATE jobs SET driverPickedUpAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+      [pickupTime, id]
+    );
+
+    const updatedJob = await query(
+      'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
+      [id]
+    );
+
+    res.json(updatedJob[0]);
+  } catch (error) {
+    console.error('Error marking pickup:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Driver-specific: Mark dropoff time
+router.post('/:id/dropoff', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    // Verify job is assigned to this driver
+    const jobs = await query('SELECT * FROM jobs WHERE id = ? AND driverId = ?', [id, userId]);
+    if (jobs.length === 0) {
+      return res.status(404).json({ error: 'Job not found or not assigned to you' });
+    }
+
+    const dropoffTime = new Date().toISOString();
+
+    await run(
+      'UPDATE jobs SET driverDroppedOffAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+      [dropoffTime, id]
+    );
+
+    const updatedJob = await query(
+      'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
+      [id]
+    );
+
+    res.json(updatedJob[0]);
+  } catch (error) {
+    console.error('Error marking dropoff:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;
