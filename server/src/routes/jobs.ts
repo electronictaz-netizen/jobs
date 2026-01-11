@@ -4,6 +4,15 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
+// Helper function to convert job from database format to API format
+const convertJob = (job: any) => {
+  if (!job) return job;
+  return {
+    ...job,
+    isRecurring: job.isRecurring === 1 || job.isRecurring === true
+  };
+};
+
 // Get all jobs (with optional filters)
 router.get('/', async (req, res) => {
   try {
@@ -29,7 +38,7 @@ router.get('/', async (req, res) => {
     sql += ' ORDER BY j.pickupDate, j.pickupTime';
 
     const jobs = await query(sql, params);
-    res.json(jobs);
+    res.json(jobs.map(convertJob));
   } catch (error) {
     console.error('Error fetching jobs:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -49,12 +58,33 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    res.json(jobs[0]);
+    res.json(convertJob(jobs[0]));
   } catch (error) {
     console.error('Error fetching job:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Helper function to add days/weeks/months to a date
+const addToDate = (dateStr: string, frequency: string, count: number): string => {
+  const date = new Date(dateStr + 'T00:00:00');
+  
+  switch (frequency) {
+    case 'daily':
+      date.setDate(date.getDate() + count);
+      break;
+    case 'weekly':
+      date.setDate(date.getDate() + (count * 7));
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() + count);
+      break;
+    default:
+      date.setDate(date.getDate() + (count * 7)); // Default to weekly
+  }
+  
+  return date.toISOString().split('T')[0];
+};
 
 // Create a new job
 router.post('/', async (req, res) => {
@@ -66,7 +96,10 @@ router.post('/', async (req, res) => {
       pickupLocation,
       dropoffLocation,
       driverId,
-      numberOfPassengers
+      numberOfPassengers,
+      isRecurring,
+      recurrenceFrequency,
+      recurrenceCount
     } = req.body;
 
     if (!pickupDate || !pickupTime || !flightNumber || !pickupLocation || !dropoffLocation) {
@@ -74,11 +107,15 @@ router.post('/', async (req, res) => {
     }
 
     const status = driverId ? 'Assigned' : 'Unassigned';
+    const recurring = isRecurring ? 1 : 0;
+    const frequency = recurrenceFrequency || null;
+    const count = recurrenceCount || 12;
 
+    // Create the first job
     const result = await run(
       `INSERT INTO jobs (pickupDate, pickupTime, flightNumber, pickupLocation, dropoffLocation, 
-        driverId, numberOfPassengers, status, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        driverId, numberOfPassengers, status, isRecurring, recurrenceFrequency, recurrenceCount, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
       [
         pickupDate,
         pickupTime,
@@ -87,16 +124,50 @@ router.post('/', async (req, res) => {
         dropoffLocation,
         driverId || null,
         numberOfPassengers || 1,
-        status
+        status,
+        recurring,
+        frequency,
+        count
       ]
     );
+
+    const createdJobIds = [result.lastID];
+
+    // If recurring, create future instances
+    if (isRecurring && recurrenceFrequency) {
+      for (let i = 1; i <= count; i++) {
+        const nextDate = addToDate(pickupDate, recurrenceFrequency, i);
+        const futureResult = await run(
+          `INSERT INTO jobs (pickupDate, pickupTime, flightNumber, pickupLocation, dropoffLocation, 
+            driverId, numberOfPassengers, status, isRecurring, recurrenceFrequency, recurrenceCount, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+          [
+            nextDate,
+            pickupTime,
+            flightNumber,
+            pickupLocation,
+            dropoffLocation,
+            driverId || null,
+            numberOfPassengers || 1,
+            'Unassigned', // Future jobs start as unassigned
+            recurring,
+            frequency,
+            count
+          ]
+        );
+        createdJobIds.push(futureResult.lastID);
+      }
+    }
 
     const newJob = await query(
       'SELECT j.*, d.name as driverName FROM jobs j LEFT JOIN drivers d ON j.driverId = d.id WHERE j.id = ?',
       [result.lastID]
     );
 
-    res.status(201).json(newJob[0]);
+    res.status(201).json({
+      ...convertJob(newJob[0]),
+      createdInstances: createdJobIds.length
+    });
   } catch (error) {
     console.error('Error creating job:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -156,7 +227,7 @@ router.put('/:id', async (req, res) => {
       [id]
     );
 
-    res.json(updatedJob[0]);
+    res.json(convertJob(updatedJob[0]));
   } catch (error) {
     console.error('Error updating job:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -204,7 +275,7 @@ router.post('/:id/pickup', authenticate, async (req: AuthRequest, res) => {
       [id]
     );
 
-    res.json(updatedJob[0]);
+    res.json(convertJob(updatedJob[0]));
   } catch (error) {
     console.error('Error marking pickup:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -235,7 +306,7 @@ router.post('/:id/dropoff', authenticate, async (req: AuthRequest, res) => {
       [id]
     );
 
-    res.json(updatedJob[0]);
+    res.json(convertJob(updatedJob[0]));
   } catch (error) {
     console.error('Error marking dropoff:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -18,7 +18,10 @@ const JobForm: React.FC<JobFormProps> = ({ job, drivers, locations, onSave, onCl
     dropoffLocation: '',
     driverId: '' as string | number | null,
     numberOfPassengers: 1,
-    status: 'Unassigned' as 'Assigned' | 'Unassigned'
+    status: 'Unassigned' as 'Assigned' | 'Unassigned',
+    isRecurring: false,
+    recurrenceFrequency: 'weekly' as 'weekly' | 'daily' | 'monthly',
+    recurrenceCount: 12
   });
 
   useEffect(() => {
@@ -31,25 +34,55 @@ const JobForm: React.FC<JobFormProps> = ({ job, drivers, locations, onSave, onCl
         dropoffLocation: job.dropoffLocation || '',
         driverId: job.driverId || '',
         numberOfPassengers: job.numberOfPassengers || 1,
-        status: job.status || 'Unassigned'
+        status: job.status || 'Unassigned',
+        isRecurring: false, // Don't allow changing recurring settings when editing
+        recurrenceFrequency: 'weekly',
+        recurrenceCount: 12
+      });
+    } else {
+      setFormData({
+        pickupDate: '',
+        pickupTime: '',
+        flightNumber: '',
+        pickupLocation: '',
+        dropoffLocation: '',
+        driverId: '',
+        numberOfPassengers: 1,
+        status: 'Unassigned',
+        isRecurring: false,
+        recurrenceFrequency: 'weekly',
+        recurrenceCount: 12
       });
     }
   }, [job]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    const submitData: any = {
       ...formData,
       driverId: formData.driverId ? Number(formData.driverId) : null,
       status: formData.driverId ? 'Assigned' : 'Unassigned'
-    });
+    };
+    
+    // Only include recurring fields if creating new job and recurring is checked
+    if (!job && formData.isRecurring) {
+      submitData.isRecurring = true;
+      submitData.recurrenceFrequency = formData.recurrenceFrequency;
+      submitData.recurrenceCount = formData.recurrenceCount;
+    } else {
+      submitData.isRecurring = false;
+    }
+    
+    onSave(submitData);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'numberOfPassengers' ? parseInt(value) || 1 : value,
+      [name]: type === 'checkbox' ? checked : (name === 'numberOfPassengers' || name === 'recurrenceCount' ? parseInt(value) || (name === 'numberOfPassengers' ? 1 : 12) : value),
       status: name === 'driverId' ? (value ? 'Assigned' : 'Unassigned') : prev.status
     }));
   };
@@ -197,6 +230,62 @@ const JobForm: React.FC<JobFormProps> = ({ job, drivers, locations, onSave, onCl
                 </select>
               </div>
             </div>
+
+            {!job && (
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <input
+                    type="checkbox"
+                    name="isRecurring"
+                    id="isRecurring"
+                    checked={formData.isRecurring}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="isRecurring" className="text-sm font-medium text-gray-700">
+                    Create as recurring job
+                  </label>
+                </div>
+
+                {formData.isRecurring && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Frequency *
+                      </label>
+                      <select
+                        name="recurrenceFrequency"
+                        value={formData.recurrenceFrequency}
+                        onChange={handleChange}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Number of Occurrences *
+                      </label>
+                      <input
+                        type="number"
+                        name="recurrenceCount"
+                        value={formData.recurrenceCount}
+                        onChange={handleChange}
+                        required={formData.isRecurring}
+                        min="1"
+                        max="52"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Number of future jobs to create
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-3 pt-4 border-t">
               <button

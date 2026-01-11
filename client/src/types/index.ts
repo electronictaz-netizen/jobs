@@ -11,6 +11,12 @@ export interface Job {
   driverPickedUpAt?: string | null;
   driverDroppedOffAt?: string | null;
   status: 'Assigned' | 'Unassigned';
+  isRecurring?: boolean;
+  recurrenceFrequency?: 'weekly' | 'daily' | 'monthly';
+  recurrenceCount?: number;
+  flightStatus?: string;
+  flightStatusUpdatedAt?: string;
+  flightStatusData?: string;
   createdAt?: string;
   updatedAt?: string;
 }

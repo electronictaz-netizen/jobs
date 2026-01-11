@@ -15,6 +15,12 @@ export interface Job {
   driverPickedUpAt?: string | null;
   driverDroppedOffAt?: string | null;
   status: 'Assigned' | 'Unassigned';
+  isRecurring?: boolean;
+  recurrenceFrequency?: 'weekly' | 'daily' | 'monthly';
+  recurrenceCount?: number;
+  flightStatus?: string;
+  flightStatusUpdatedAt?: string;
+  flightStatusData?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -70,11 +76,67 @@ export const initDatabase = () => {
       driverPickedUpAt TEXT,
       driverDroppedOffAt TEXT,
       status TEXT DEFAULT 'Unassigned' CHECK(status IN ('Assigned', 'Unassigned')),
+      isRecurring INTEGER DEFAULT 0,
+      recurrenceFrequency TEXT,
+      recurrenceCount INTEGER DEFAULT 12,
+      flightStatus TEXT,
+      flightStatusUpdatedAt DATETIME,
+      flightStatusData TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (driverId) REFERENCES drivers(id)
     )
   `);
+
+  // Migrate existing databases: Add recurring columns if they don't exist
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN isRecurring INTEGER DEFAULT 0');
+  } catch (e: any) {
+    // Column already exists, ignore error
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding isRecurring column:', e);
+    }
+  }
+  
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN recurrenceFrequency TEXT');
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding recurrenceFrequency column:', e);
+    }
+  }
+  
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN recurrenceCount INTEGER DEFAULT 12');
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding recurrenceCount column:', e);
+    }
+  }
+  
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN flightStatus TEXT');
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding flightStatus column:', e);
+    }
+  }
+  
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN flightStatusUpdatedAt DATETIME');
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding flightStatusUpdatedAt column:', e);
+    }
+  }
+  
+  try {
+    database.run('ALTER TABLE jobs ADD COLUMN flightStatusData TEXT');
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column')) {
+      console.error('Error adding flightStatusData column:', e);
+    }
+  }
 
   // Create drivers table
   database.run(`
